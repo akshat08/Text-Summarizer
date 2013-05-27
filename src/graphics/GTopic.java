@@ -14,11 +14,33 @@ package graphics;
  *
  * @author Administrator
  */
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Date;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class GTopic extends javax.swing.JFrame {
 
     /** Creates new form GTopic */
-    public GTopic() {
+    public GTopic() throws Exception {
+        
+        System.out.println("System Started");
+        
+        Class.forName("com.mysql.jdbc.Driver");
+        
+        connect = DriverManager.getConnection("jdbc:mysql://localhost:3306/nlsummarize?"
+              + "user=root&password=admin");
+        
+        if ( connect.isClosed() ) System.out.println("CONNECTION CLOSED");
+        
         initComponents();
+        
     }
 
     /** This method is called from within the constructor to
@@ -50,11 +72,16 @@ public class GTopic extends javax.swing.JFrame {
         jLayeredPane1.add(jTextField1, javax.swing.JLayeredPane.DEFAULT_LAYER);
 
         jButton1.setText("Find");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                GTopic.this.actionPerformed(evt);
+            }
+        });
         jButton1.setBounds(600, 10, 90, 30);
         jLayeredPane1.add(jButton1, javax.swing.JLayeredPane.DEFAULT_LAYER);
 
-        jLabel2.setText("Links");
-        jLabel2.setBounds(20, 44, 60, 30);
+        jLabel2.setText("Related Stories");
+        jLabel2.setBounds(20, 44, 120, 30);
         jLayeredPane1.add(jLabel2, javax.swing.JLayeredPane.DEFAULT_LAYER);
 
         jTextArea1.setColumns(20);
@@ -89,6 +116,49 @@ public class GTopic extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
+    private void actionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_actionPerformed
+        // TODO add your handling code here:
+        String comm = evt.getActionCommand();
+        if ( comm.equals("Find") ) {
+            jTextArea1.setText("");
+            jTextArea2.setText("");
+            String out = "";
+            try {
+                String topic  = jTextField1.getText();
+                PreparedStatement ps = connect.prepareStatement("select link from nlsummarize.label_link where name like ?");
+                ps.setString(1,"%"+topic+"%");
+                ResultSet rs = ps.executeQuery();
+                
+                while ( rs.next() ) {
+                    String link = rs.getString("LINK");
+                    out += link;
+                    out += '\n';
+                }
+                
+                jTextArea1.setText(out);
+                
+                out = "";
+                
+                ps = connect.prepareStatement("select details from nlsummarize.label_summary where name like ?");
+                ps.setString(1,"%"+topic+"%");
+                ResultSet rs1 = ps.executeQuery();
+                
+                while ( rs1.next() ) {
+                    String point = rs1.getString("details");
+                    out += point;
+                    out += '\n';
+                }
+                
+                jTextArea2.setText(out);
+                
+                ps.close();
+                
+            } catch (SQLException ex) {
+                Logger.getLogger(GTopic.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+    }//GEN-LAST:event_actionPerformed
+
     /**
      * @param args the command line arguments
      */
@@ -96,10 +166,16 @@ public class GTopic extends javax.swing.JFrame {
         java.awt.EventQueue.invokeLater(new Runnable() {
 
             public void run() {
-                new GTopic().setVisible(true);
+                try {
+                    new GTopic().setVisible(true);
+                } catch (Exception ex) {
+                    Logger.getLogger(GTopic.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         });
     }
+    private Connection connect = null;
+    
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JLabel jLabel1;

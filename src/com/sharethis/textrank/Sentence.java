@@ -57,7 +57,7 @@ public class
     /**
      * Public members.
      */
-
+    public int index;
     public String text = null;
     public String[] token_list = null;
     public Node[] node_list = null;
@@ -70,10 +70,11 @@ public class
      */
 
     public
-	Sentence (final String text)
+	Sentence (final String text, int num )
     {
 	this.text = text;
         this.s_rank = 0.0D;
+        this.index = num;
     }
 
 

@@ -20,10 +20,12 @@ public class Label
 {
     public double label_rank;
     public String label_key;
+    public String label_name;
     public HashSet<Sentence> points = new HashSet<Sentence>();
 
-    public Label(  String text, double r  ) {
-        this.label_key = text;
+    public Label(  String text_key, String text_name, double r  ) {
+        this.label_key = text_key;
+        this.label_name = text_name;
         this.label_rank = r;
     }
     

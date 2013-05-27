@@ -39,13 +39,18 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import net.didion.jwnl.data.POS;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.apache.log4j.PropertyConfigurator;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Date;
 
 public class Summarize {
     
@@ -62,6 +67,11 @@ public class Summarize {
 
     private ArrayList<Label> labels = new ArrayList<Label>();
     
+    /////// DATABASE VARIABLES /////////////////////
+    
+    private Connection connect = null;
+    
+    
     ////// CONSTRUCTOR FUNCTION ///////////////////
     
     public Summarize( ) throws Exception {
@@ -74,6 +84,13 @@ public class Summarize {
         
         log4j_conf = "C://Users//Administrator//Documents//NetBeansProjects//TextRank//src//res//log4j.properties";
         PropertyConfigurator.configure(log4j_conf);
+        
+        Class.forName("com.mysql.jdbc.Driver");
+        
+        connect = DriverManager.getConnection("jdbc:mysql://localhost:3306/nlsummarize?"
+              + "user=root&password=admin");
+        
+        if ( connect.isClosed() ) System.out.println("CONNECTION CLOSED");
         
     }
 
@@ -237,31 +254,56 @@ public class Summarize {
         
     }
  
-    public void clusterText( TextRank t ) throws Exception { 
+    public void clusterText( TextRank t, String link ) throws Exception { 
         
         final TreeSet<MetricVector> key_phrase_list = new TreeSet<MetricVector>(t.metric_space.values());
         
         Label obj;
         
+        PreparedStatement ps;
+        PreparedStatement preparedStatement;
         ///Creating labels
+        
+        preparedStatement = connect.prepareStatement("insert into nlsummarize.label(name) values(?)");
+        ps = connect.prepareStatement("insert into nlsummarize.label_link(name,link) values(?,?)");
         
         for (MetricVector mv : key_phrase_list) {
             
 	    if (mv.metric >= /*MIN_NORMALIZED_RANK */ 0.05D ) {
                 
                 /// Adding Labels
-                obj = new Label(mv.ngram_key, mv.ngram_rank);
+                obj = new Label(mv.ngram_key, mv.value.text, mv.ngram_rank);
                 labels.add(obj);
-                
+                ////////////// SQL PROCESS ///////////////////////
+                preparedStatement.setString(1,mv.value.text);
+                preparedStatement.addBatch();
+                if ( !link.isEmpty() ) {
+                    ps.setString(1,mv.value.text);
+                    ps.setString(2,link);
+                    ps.addBatch();
+                }
+                /////////////////////////////////////////////////////
 	    }
-            
+            ////////////// SQL PROCESS ///////////////////////
+            preparedStatement.executeBatch();
+            if ( !link.isEmpty() ) ps.executeBatch();
+            //////////////////////////////////////////////////
             obj = null;
             
 	}
          
         /// Adding Sentences according to labels
         
+        ////////////// SQL PROCESS ///////////////////////
+        
+        preparedStatement = connect.prepareStatement("insert into nlsummarize.label_summary(name,details) values(?,?)");
+        ps = connect.prepareStatement("insert into nlsummarize.links_summary(link,details) values(?,?)");
+        
+        ///////////////////////////////////////////////////
+        
+        
         // taking each sentence
+        
         for ( Sentence s : t.s_list ) {
             
             double max_rank = 0.0D;
@@ -284,10 +326,25 @@ public class Summarize {
             if ( apt != null ) { 
                 apt.points.add(s);
                 s.s_rank = max_rank;
+                
+                ////////////// SQL PROCESS ///////////////////////
+                preparedStatement.setString(1, apt.label_name);
+                preparedStatement.setString(2, s.text);
+                if ( !link.isEmpty() ) {
+                    ps.setString(1,link);
+                    ps.setString(2,s.text);
+                }
+                preparedStatement.addBatch();
+                if ( !link.isEmpty() ) ps.addBatch();
+                ///////////////////////////////////////////////////
             }
             
         }
         
+        preparedStatement.executeBatch();
+        if ( !link.isEmpty() ) ps.executeBatch();
+        preparedStatement.close();
+        ps.close();
     }
     
     public void clearLabels() {
@@ -314,31 +371,53 @@ public class Summarize {
                 );
     }
     
-    public String printClusters( TextRank t, double percentage ) throws Exception {
+    
+    
+    public String returnSummary( TextRank t, double per ) throws Exception {
         
-        int i = 0;
-        
+        ArrayList<Sentence> summ = new ArrayList<Sentence>();
         String summarized = "";
         
-        int limit = (int)percentage * ( t.s_list.size() );
+        int limit = (int)per * ( t.s_list.size() );
         limit = limit / 100;
         
-        for ( Label l : labels ) {
-            
+        //// Adding Sentences to summary
+        
+        int i = 1;
+        
+        for ( Label l: labels ) {
             if ( i > limit ) break;
-            
             if ( l.points.size() > 0 ) {
-            
-                for ( Sentence s: l.points ) {
-                    //summarized.concat( (i++) + ") " + s.text + '\n');
+                for ( Sentence s : l.points ) {
                     if ( i > limit ) break;
-                    summarized += s.text;
-                    summarized += '\n';
+                    summ.add(s);
                     i++;
                 }
-                
             }
-            
+        }
+         
+        /// Sorting the summary according to labels
+        
+        Collections.sort(summ,new Comparator<Sentence>() {
+			public int compare (Sentence n1, Sentence n2) {
+			    if (n1.index < n2.index ) {
+				return -1;
+			    }
+			    else if (n1.index > n2.index ) {
+				return 1;
+			    }
+			    else {
+				return 0;
+			    }
+			}
+		    }
+                );
+        
+        /// Streaming the summary to string format
+        
+        for ( Sentence point: summ ) {
+            summarized += point.text;
+            summarized += '\n';
         }
         
         return summarized;
@@ -360,7 +439,7 @@ public class Summarize {
     //***************************************************************//
     //***************************************************************//
     
-    public String doSummarization ( String text, double percentage ) throws Exception {
+    public String doSummarization ( String text, double percentage, String link ) throws Exception {
         
         
         String summarized;        
@@ -388,13 +467,13 @@ public class Summarize {
         processNGramsMetric(tr);
             
             ///Create Labels and make clusters from text
-        clusterText(tr);
+        clusterText(tr, link);
             
             /// Sort Clusters
         sortClusters();
             
             ///Print Clusters
-        summarized = printClusters( tr, percentage );
+        summarized = returnSummary( tr, percentage );
 
         clearLabels();
         

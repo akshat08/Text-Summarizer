@@ -158,12 +158,12 @@ public class
 	initTime();
 
 	// scan sentences to construct a graph of relevent morphemes
-
+        int num = 1;
 	for (String sent_text : lang.splitParagraph(text)) {
-	    final Sentence s = new Sentence(sent_text.trim());
+	    final Sentence s = new Sentence(sent_text.trim(),num);
 	    s.mapTokens(lang, graph);
 	    s_list.add(s);
-
+            num++;
 	    if (LOG.isDebugEnabled()) {
 		LOG.debug("s: " + s.text);
 		LOG.debug(s.md5_hash);

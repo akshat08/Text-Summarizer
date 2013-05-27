@@ -25,6 +25,13 @@ import de.vogella.rss.model.Feed;
 import de.vogella.rss.model.FeedMessage;
 import de.vogella.rss.read.RSSFeedParser;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
 import com.summarizer.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -32,7 +39,17 @@ import java.util.logging.Logger;
 public class GSummarizer extends javax.swing.JFrame {
 
     /** Creates new form GSummarizer */
-    public GSummarizer() {
+    public GSummarizer() throws Exception {
+        
+        Class.forName("com.mysql.jdbc.Driver");
+        
+        connect = DriverManager.getConnection("jdbc:mysql://localhost:3306/nlsummarize?"
+              + "user=root&password=admin");
+        
+        if ( connect.isClosed() ) System.out.println("CONNECTION CLOSED");
+            
+        obj = new Summarize();
+        
         initComponents();
     }
 
@@ -123,7 +140,7 @@ public class GSummarizer extends javax.swing.JFrame {
         jLayeredPane1.add(jTextField3, javax.swing.JLayeredPane.DEFAULT_LAYER);
 
         jLabel3.setBackground(new java.awt.Color(255, 255, 255));
-        jLabel3.setFont(new java.awt.Font("Vani", 1, 16));
+        jLabel3.setFont(new java.awt.Font("Vani", 1, 16)); // NOI18N
         jLabel3.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
         jLabel3.setText("RSS FEEDS");
         jLabel3.setBounds(1130, 30, 190, 30);
@@ -146,6 +163,7 @@ public class GSummarizer extends javax.swing.JFrame {
         jLayeredPane1.add(jScrollPane3, javax.swing.JLayeredPane.DEFAULT_LAYER);
 
         jButton3.setText("Search Topic");
+        jButton3.setActionCommand("search");
         jButton3.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 GSummarizer.this.actionPerformed(evt);
@@ -179,9 +197,40 @@ public class GSummarizer extends javax.swing.JFrame {
             
             String link = jTextField2.getText();
             URL url;
-            String text;
+            String text, inFile, outFile = "";
+            double limit = Double.parseDouble(jTextField1.getText());
+            
             if ( link.equals(" ") ) { } else {
                 try {
+                     //////////////// SQL PROCESSING ///////////////////
+                    try {
+                        
+                        PreparedStatement ps = connect.prepareStatement("select details from nlsummarize.links_summary where link like ?");
+                        ps.setString(1,link);
+                        ResultSet rs = ps.executeQuery();
+                        
+                        int i,size;
+                        size = rs.getFetchSize();
+                        size = (int)(limit / 100 ) * size;
+                        i = 1;
+                        while ( rs.next() ) {
+                            if ( i > size ) break;
+                            outFile += rs.getString("details");
+                            outFile += '\n';
+                            i++;
+                        }
+                        
+                        jTextArea2.setText(outFile);
+                        rs.close();
+                        ps.close();
+                        
+                    } catch (SQLException ex) {
+                        Logger.getLogger(GSummarizer.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                        
+                    
+                    //////////////////////////////////////////////////
+                    
                     url = new URL(link);
                     try {
                         text = ArticleExtractor.INSTANCE.getText(url);
@@ -194,17 +243,17 @@ public class GSummarizer extends javax.swing.JFrame {
                 }
             }
             
-            String file;
-            double limit;
-            file = jTextArea1.getText();
-            limit = Double.parseDouble(jTextField1.getText());
-            if ( file.equals("") );
+            
+            
+            inFile = jTextArea1.getText();
+            if ( inFile.equals("") || !outFile.isEmpty() ) { System.out.println("OutFile Is not Empty"); }
             else {
                 try {
-                    Summarize obj = new Summarize();
-                    file = obj.doSummarization(file, limit);
+                    
+                    outFile = obj.doSummarization(inFile, limit, link);
                     jTextArea2.setText("");
-                    jTextArea2.setText(file);
+                    jTextArea2.setText(outFile);
+                    
                 } catch (Exception ex) {
                     Logger.getLogger(GSummarizer.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -225,6 +274,17 @@ public class GSummarizer extends javax.swing.JFrame {
             }
             jTextArea3.setText(rss);
         }
+        
+        if ( command.equals("search") ) {
+            GTopic topic;
+            try {
+                topic = new GTopic();
+                topic.setVisible(true);
+            } catch (Exception ex) {
+                Logger.getLogger(GSummarizer.class.getName()).log(Level.SEVERE, null, ex);
+            }
+
+        }
 }//GEN-LAST:event_actionPerformed
 
     /**
@@ -234,10 +294,18 @@ public class GSummarizer extends javax.swing.JFrame {
         java.awt.EventQueue.invokeLater(new Runnable() {
 
             public void run() {
-                new GSummarizer().setVisible(true);
+                try {
+                    new GSummarizer().setVisible(true);
+                } catch (Exception ex) {
+                    Logger.getLogger(GSummarizer.class.getName()).log(Level.SEVERE, null, ex);
+                }
             }
         });
     }
+    
+    private Summarize obj;
+    private Connection connect = null;
+    
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
